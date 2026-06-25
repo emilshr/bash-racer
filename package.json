@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "tsx server.ts",
     "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx lib/db/seed.ts",
     "typecheck": "tsc --noEmit",
