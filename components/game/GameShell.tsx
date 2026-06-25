@@ -4,13 +4,14 @@ import dynamic from "next/dynamic";
 import { useCallback, useRef, useState } from "react";
 import { useAtom, useAtomValue } from "jotai";
 import {
-  currentSnippetAtom,
+  commandSessionAtom,
+  createCommandSession,
   gameModeAtom,
   lobbyStatusAtom,
-  offlineSnippetAtom,
+  currentSnippetAtom,
 } from "@/lib/atoms/game";
-import { playerIdAtom } from "@/lib/atoms/session";
-import { getRandomSnippet } from "@/lib/actions/snippets";
+import { playerIdAtom, usernameAtom } from "@/lib/atoms/session";
+import { getRandomSession } from "@/lib/actions/snippets";
 import { Loader2 } from "lucide-react";
 import { AppHeader } from "@/components/header/AppHeader";
 import { MacTerminal } from "@/components/terminal/MacTerminal";
@@ -29,16 +30,17 @@ export function GameShell() {
   const lobbyStatus = useAtomValue(lobbyStatusAtom);
   const onlineSnippet = useAtomValue(currentSnippetAtom);
   const [playerId] = useAtom(playerIdAtom);
-  const [offlineSnippet, setOfflineSnippet] = useAtom(offlineSnippetAtom);
+  const [username] = useAtom(usernameAtom);
+  const [, setSession] = useAtom(commandSessionAtom);
 
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({ wpm: 0, accuracy: 100, elapsedMs: 0 });
-  const [snippetKey, setSnippetKey] = useState(0);
-  const emitProgressRef = useRef<(index: number, wpm: number) => void>(() => { });
+  const [sessionKey, setSessionKey] = useState(0);
+  const emitProgressRef = useRef<(index: number, wpm: number) => void>(() => {});
 
   const isOnline = mode === "online";
 
-  const activeText = isOnline ? onlineSnippet : (offlineSnippet?.content ?? "");
+  const activeText = isOnline ? onlineSnippet : "";
   const canType = isOnline ? lobbyStatus === "racing" : true;
   const surfaceLoading = loading || (isOnline && lobbyStatus !== "racing" && !onlineSnippet);
 
@@ -46,17 +48,17 @@ export function GameShell() {
     emitProgressRef.current(index, wpm);
   }, []);
 
-  const loadOfflineSnippet = useCallback(async () => {
+  const loadNewSession = useCallback(async () => {
     setLoading(true);
     try {
-      const snippet = await getRandomSnippet();
-      setOfflineSnippet(snippet);
-      setSnippetKey((k) => k + 1);
+      const commands = await getRandomSession();
+      setSession(createCommandSession(commands));
+      setSessionKey((k) => k + 1);
       setStats({ wpm: 0, accuracy: 100, elapsedMs: 0 });
     } finally {
       setLoading(false);
     }
-  }, [setOfflineSnippet]);
+  }, [setSession]);
 
   return (
     <div className="flex min-h-full flex-1 flex-col gap-4">
@@ -78,21 +80,34 @@ export function GameShell() {
       )}
 
       <MacTerminal title={isOnline ? "bash-racer — lobby" : "bash-racer — practice"}>
-        <TypingSurface
-          key={`${isOnline ? "online" : "offline"}-${snippetKey}-${activeText.slice(0, 20)}`}
-          text={activeText}
-          loading={surfaceLoading}
-          disabled={!canType}
-          onProgress={isOnline ? handleOnlineProgress : undefined}
-          onStatsChange={setStats}
-        />
+        {isOnline ? (
+          <TypingSurface
+            key={`online-${activeText.slice(0, 20)}`}
+            text={activeText}
+            username={username}
+            branch="race"
+            loading={surfaceLoading}
+            disabled={!canType}
+            onProgress={handleOnlineProgress}
+            onStatsChange={setStats}
+          />
+        ) : (
+          <TypingSurface
+            key={`offline-${sessionKey}`}
+            username={username}
+            branch="practice"
+            loading={surfaceLoading}
+            disabled={!canType}
+            onStatsChange={setStats}
+          />
+        )}
       </MacTerminal>
 
       {!isOnline && (
         <div className="mx-auto flex w-full max-w-5xl justify-center px-4">
-          <Button variant="outline" onClick={() => void loadOfflineSnippet()} disabled={loading}>
+          <Button variant="outline" onClick={() => void loadNewSession()} disabled={loading}>
             {loading && <Loader2 className="animate-spin" />}
-            New snippet
+            New session
           </Button>
         </div>
       )}

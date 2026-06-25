@@ -1,27 +1,26 @@
 "use client";
 
-import { getDefaultStore, Provider } from "jotai";
+import { Provider } from "jotai";
 import { useHydrateAtoms } from "jotai/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SessionBootstrap } from "@/components/session-bootstrap";
-import { offlineSnippetAtom } from "@/lib/atoms/game";
-import type { Snippet } from "@/lib/db/schema";
+import { commandSessionAtom, createCommandSession } from "@/lib/atoms/game";
 
-type HydrateAtomsProps = {
-  initialSnippet: Snippet | null;
+type ProvidersProps = {
+  initialCommands: string[];
   children: React.ReactNode;
 };
 
-function HydrateAtoms({ initialSnippet, children }: HydrateAtomsProps) {
-  useHydrateAtoms([[offlineSnippetAtom, initialSnippet]]);
+function HydrateAtoms({ initialCommands, children }: ProvidersProps) {
+  useHydrateAtoms([[commandSessionAtom, createCommandSession(initialCommands)]]);
   return children;
 }
 
-export function Providers({ initialSnippet, children }: HydrateAtomsProps) {
+export function Providers({ initialCommands, children }: ProvidersProps) {
   return (
-    <Provider store={getDefaultStore()}>
+    <Provider>
       <SessionBootstrap />
-      <HydrateAtoms initialSnippet={initialSnippet}>
+      <HydrateAtoms initialCommands={initialCommands}>
         <TooltipProvider>{children}</TooltipProvider>
       </HydrateAtoms>
     </Provider>

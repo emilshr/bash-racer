@@ -2,12 +2,12 @@ import { Suspense } from "react";
 import { GameShell } from "@/components/game/GameShell";
 import { GameShellSkeleton } from "@/components/game/GameShellSkeleton";
 import { Providers } from "@/components/providers";
-import { fetchRandomSnippet } from "@/lib/db/snippets";
+import { fetchRandomSessionCommands } from "@/lib/db/snippets";
 
-async function GameShellWithSnippet() {
-  const initialSnippet = await fetchRandomSnippet();
+async function GameShellWithSession() {
+  const initialCommands = await fetchRandomSessionCommands();
   return (
-    <Providers initialSnippet={initialSnippet}>
+    <Providers initialCommands={initialCommands}>
       <GameShell />
     </Providers>
   );
@@ -16,7 +16,7 @@ async function GameShellWithSnippet() {
 export default function Home() {
   return (
     <Suspense fallback={<GameShellSkeleton />}>
-      <GameShellWithSnippet />
+      <GameShellWithSession />
     </Suspense>
   );
 }

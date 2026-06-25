@@ -12,6 +12,12 @@
   --color-terminal-bg: oklch(0.18 0 0);
   --color-terminal-fg: oklch(0.95 0 0);
   --color-terminal-muted: oklch(0.55 0 0);
+  --color-terminal-prompt: oklch(0.72 0.19 145);
+  --color-terminal-prompt-user: oklch(0.78 0.14 200);
+  --color-terminal-prompt-host: oklch(0.95 0 0);
+  --color-terminal-prompt-at: oklch(0.75 0.2 145);
+  --color-terminal-prompt-git: oklch(0.72 0.12 300);
+  --color-terminal-prompt-branch: oklch(0.72 0.16 25);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
