@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { useAtomValue } from "jotai";
 import { lobbyCountdownEndsAtAtom, lobbyStatusAtom, raceProgressAtom } from "@/lib/atoms/game";
 import { Badge } from "@/components/ui/badge";
@@ -19,27 +19,29 @@ const statusLabel = {
   finished: "Race finished",
 };
 
+function useCountdownNow(active: boolean) {
+  return useSyncExternalStore(
+    (callback) => {
+      if (!active) return () => {};
+      const id = setInterval(callback, 250);
+      return () => clearInterval(id);
+    },
+    () => Date.now(),
+    () => 0,
+  );
+}
+
 export function LobbyStatus() {
   const status = useAtomValue(lobbyStatusAtom);
   const countdownEndsAt = useAtomValue(lobbyCountdownEndsAtAtom);
   const players = useAtomValue(raceProgressAtom);
-  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const ticking = status === "countdown" && countdownEndsAt !== null;
+  const now = useCountdownNow(ticking);
 
-  useEffect(() => {
-    if (status !== "countdown" || !countdownEndsAt) {
-      setSecondsLeft(null);
-      return;
-    }
-
-    const tick = () => {
-      const left = Math.max(0, Math.ceil((countdownEndsAt - Date.now()) / 1000));
-      setSecondsLeft(left);
-    };
-
-    tick();
-    const id = setInterval(tick, 250);
-    return () => clearInterval(id);
-  }, [status, countdownEndsAt]);
+  const secondsLeft =
+    ticking && countdownEndsAt
+      ? Math.max(0, Math.ceil((countdownEndsAt - now) / 1000))
+      : null;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 text-sm">

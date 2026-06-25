@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAtom, useSetAtom } from "jotai";
-import { io, type Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 import {
   currentSnippetAtom,
   lobbyCountdownEndsAtAtom,
@@ -11,15 +11,14 @@ import {
   raceStartedAtAtom,
   type LobbyStatus,
 } from "@/lib/atoms/game";
-import { playerIdAtom, playerSessionAtom, usernameAtom, generateUsername } from "@/lib/atoms/session";
+import { playerSessionAtom } from "@/lib/atoms/session";
+import { ensurePlayerSession } from "@/lib/atoms/session-init";
 import type { ClientToServerEvents, ServerToClientEvents } from "@/lib/socket/events";
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 export function useSocket(enabled: boolean) {
   const socketRef = useRef<AppSocket | null>(null);
-  const [playerId, setPlayerId] = useAtom(playerIdAtom);
-  const [username, setUsername] = useAtom(usernameAtom);
   const [playerSession, setPlayerSession] = useAtom(playerSessionAtom);
   const playerSessionRef = useRef(playerSession);
   playerSessionRef.current = playerSession;
@@ -34,89 +33,85 @@ export function useSocket(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
 
-    let id = playerId;
-    if (!id) {
-      id = crypto.randomUUID();
-      setPlayerId(id);
-    }
-    let name = username;
-    if (!name) {
-      name = generateUsername();
-      setUsername(name);
-    }
+    let cancelled = false;
 
-    const socket: AppSocket = io({
-      transports: ["websocket", "polling"],
-      autoConnect: true,
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-    });
+    void (async () => {
+      const { playerId, username } = await ensurePlayerSession();
+      if (cancelled) return;
 
-    socketRef.current = socket;
+      const { io } = await import("socket.io-client");
+      if (cancelled) return;
 
-    socket.on("connect", () => {
-      setConnected(true);
-      const session = playerSessionRef.current;
-      if (session?.lobbyId) {
-        socket.emit("lobby:rejoin", {
-          playerId: session.playerId,
-          lobbyId: session.lobbyId,
-        });
-      } else {
-        socket.emit("lobby:join", { playerId: id, username: name });
-      }
-    });
-
-    socket.on("lobby:state", (data) => {
-      setPlayerSession((prev) => {
-        if (prev?.lobbyId === data.lobbyId && prev?.playerId === id) return prev;
-        return { playerId: id, lobbyId: data.lobbyId };
+      const socket: AppSocket = io({
+        transports: ["websocket", "polling"],
+        autoConnect: true,
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
       });
-      setRaceProgress(data.players);
-      setLobbyStatus(data.status as LobbyStatus);
-      setCountdownEndsAt(data.countdownEndsAt);
-    });
 
-    socket.on("lobby:countdown", (data) => {
-      setLobbyStatus("countdown");
-      setCountdownEndsAt(data.endsAt);
-    });
+      socketRef.current = socket;
 
-    socket.on("race:start", (data) => {
-      setLobbyStatus("racing");
-      setCurrentSnippet(data.snippet.content);
-      setRaceStartedAt(data.startedAt);
-      setCountdownEndsAt(null);
-    });
+      socket.on("connect", () => {
+        setConnected(true);
+        const session = playerSessionRef.current;
+        if (session?.lobbyId) {
+          socket.emit("lobby:rejoin", {
+            playerId: session.playerId,
+            lobbyId: session.lobbyId,
+          });
+        } else {
+          socket.emit("lobby:join", { playerId, username });
+        }
+      });
 
-    socket.on("race:update", (data) => {
-      setRaceProgress(data.players);
-    });
+      socket.on("lobby:state", (data) => {
+        setPlayerSession((prev) => {
+          if (prev?.lobbyId === data.lobbyId && prev?.playerId === playerId) return prev;
+          return { playerId, lobbyId: data.lobbyId };
+        });
+        setRaceProgress(data.players);
+        setLobbyStatus(data.status as LobbyStatus);
+        setCountdownEndsAt(data.countdownEndsAt);
+      });
 
-    socket.on("race:end", (data) => {
-      setLobbyStatus("finished");
-      setRaceProgress(data.standings);
-    });
+      socket.on("lobby:countdown", (data) => {
+        setLobbyStatus("countdown");
+        setCountdownEndsAt(data.endsAt);
+      });
 
-    socket.on("error", () => {
-      setPlayerSession(null);
-    });
+      socket.on("race:start", (data) => {
+        setLobbyStatus("racing");
+        setCurrentSnippet(data.snippet.content);
+        setRaceStartedAt(data.startedAt);
+        setCountdownEndsAt(null);
+      });
 
-    socket.on("disconnect", () => {
-      setConnected(false);
-    });
+      socket.on("race:update", (data) => {
+        setRaceProgress(data.players);
+      });
+
+      socket.on("race:end", (data) => {
+        setLobbyStatus("finished");
+        setRaceProgress(data.standings);
+      });
+
+      socket.on("error", () => {
+        setPlayerSession(null);
+      });
+
+      socket.on("disconnect", () => {
+        setConnected(false);
+      });
+    })();
 
     return () => {
-      socket.disconnect();
+      cancelled = true;
+      socketRef.current?.disconnect();
       socketRef.current = null;
     };
   }, [
     enabled,
-    playerId,
-    username,
-    setPlayerId,
-    setUsername,
     setPlayerSession,
     setRaceProgress,
     setLobbyStatus,
@@ -125,12 +120,12 @@ export function useSocket(enabled: boolean) {
     setRaceStartedAt,
   ]);
 
-  const emitProgress = (index: number, wpm: number) => {
+  const emitProgress = useCallback((index: number, wpm: number) => {
     const socket = socketRef.current;
     if (socket?.connected) {
       socket.emit("race:progress", { index, wpm });
     }
-  };
+  }, []);
 
   return { connected, emitProgress };
 }

@@ -1,9 +1,6 @@
 import { atomWithStorage, createJSONStorage } from "jotai/utils";
-import {
-  adjectives,
-  animals,
-  uniqueNamesGenerator,
-} from "unique-names-generator";
+
+const STORAGE_VERSION = "v1";
 
 const noopStorage = {
   getItem: () => null,
@@ -17,24 +14,25 @@ const sessionStorage = <T>() =>
   );
 
 export const playerIdAtom = atomWithStorage<string>(
-  "bash-racer-player-id",
+  `bash-racer-player-id:${STORAGE_VERSION}`,
   "",
   sessionStorage(),
 );
 
 export const usernameAtom = atomWithStorage<string>(
-  "bash-racer-username",
+  `bash-racer-username:${STORAGE_VERSION}`,
   "",
   sessionStorage(),
 );
 
 export const playerSessionAtom = atomWithStorage<{ playerId: string; lobbyId: string } | null>(
-  "bash-racer-session",
+  `bash-racer-session:${STORAGE_VERSION}`,
   null,
   sessionStorage(),
 );
 
-export function generateUsername() {
+export async function generateUsername() {
+  const { uniqueNamesGenerator, adjectives, animals } = await import("unique-names-generator");
   return uniqueNamesGenerator({
     dictionaries: [adjectives, animals],
     separator: "-",

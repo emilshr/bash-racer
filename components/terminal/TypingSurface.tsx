@@ -15,6 +15,30 @@ type TypingSurfaceProps = {
   onStatsChange?: (stats: { wpm: number; accuracy: number; elapsedMs: number }) => void;
 };
 
+function renderTypedSegments(text: string, cursorIndex: number, errorIndices: Set<number>) {
+  const segments: { key: string; text: string; className: string }[] = [];
+  let i = 0;
+
+  while (i < cursorIndex) {
+    const isError = errorIndices.has(i);
+    const className = isError ? "text-destructive" : "text-terminal-fg";
+    let j = i + 1;
+    while (j < cursorIndex && errorIndices.has(j) === isError) j++;
+    segments.push({ key: `typed-${i}`, text: text.slice(i, j), className });
+    i = j;
+  }
+
+  if (cursorIndex < text.length) {
+    segments.push({
+      key: "remaining",
+      text: text.slice(cursorIndex),
+      className: "text-terminal-muted",
+    });
+  }
+
+  return segments;
+}
+
 export function TypingSurface({
   text,
   loading,
@@ -23,16 +47,12 @@ export function TypingSurface({
   onFinish,
   onStatsChange,
 }: TypingSurfaceProps) {
-  const { state, errorIndices, inputRef, handleKeyDown, isFinished, focus, wpm, accuracy, elapsedMs } =
-    useTyping({
-      text,
-      onProgress,
-      disabled: disabled || loading,
-    });
-
-  useEffect(() => {
-    onStatsChange?.({ wpm, accuracy, elapsedMs });
-  }, [wpm, accuracy, elapsedMs, onStatsChange]);
+  const { state, errorIndices, inputRef, handleKeyDown, isFinished, focus } = useTyping({
+    text,
+    onProgress,
+    onStatsChange,
+    disabled: disabled || loading,
+  });
 
   useEffect(() => {
     if (!loading && text) focus();
@@ -52,27 +72,17 @@ export function TypingSurface({
     );
   }
 
+  const segments = renderTypedSegments(text, state.cursorIndex, errorIndices);
+
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" onClick={focus}>
       <ScrollArea className="flex-1 p-4">
         <pre className="whitespace-pre-wrap break-all leading-relaxed">
-          {text.split("").map((char, i) => {
-            const typed = i < state.cursorIndex;
-            const isError = errorIndices.has(i);
-
-            return (
-              <span
-                key={i}
-                className={cn(
-                  !typed && "text-terminal-muted",
-                  typed && !isError && "text-terminal-fg",
-                  typed && isError && "text-destructive",
-                )}
-              >
-                {char}
-              </span>
-            );
-          })}
+          {segments.map((segment) => (
+            <span key={segment.key} className={cn(segment.className)}>
+              {segment.text}
+            </span>
+          ))}
         </pre>
       </ScrollArea>
       <textarea

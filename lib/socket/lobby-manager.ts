@@ -1,7 +1,7 @@
 import type { Redis } from "@upstash/redis";
 import { v4 as uuidv4 } from "uuid";
 import type { Snippet } from "@/lib/db/schema";
-import { getRaceSnippet } from "@/lib/actions/snippets";
+import { queryRaceSnippet } from "@/lib/db/queries/snippets";
 import { getUpstashRedis } from "@/lib/redis/upstash";
 import {
   LOBBY_CONSTANTS,
@@ -183,9 +183,11 @@ export class LobbyManager {
   }
 
   async buildLobbyState(lobbyId: string): Promise<LobbyState | null> {
-    const lobby = await this.getStoredLobby(lobbyId);
+    const [lobby, players] = await Promise.all([
+      this.getStoredLobby(lobbyId),
+      this.getPlayersMap(lobbyId),
+    ]);
     if (!lobby) return null;
-    const players = await this.getPlayersMap(lobbyId);
     return { ...lobby, players };
   }
 
@@ -195,9 +197,11 @@ export class LobbyManager {
       : await this.memory.getOpenLobbies();
 
     for (const id of openIds) {
-      const lobby = await this.getStoredLobby(id);
+      const [lobby, players] = await Promise.all([
+        this.getStoredLobby(id),
+        this.getPlayersMap(id),
+      ]);
       if (!lobby || lobby.status === "racing" || lobby.status === "finished") continue;
-      const players = await this.getPlayersMap(id);
       if (players.length < LOBBY_CONSTANTS.MAX_PLAYERS) return id;
     }
     return null;
@@ -221,16 +225,17 @@ export class LobbyManager {
     return id;
   }
 
-  private async broadcastState(lobbyId: string) {
+  private async broadcastState(lobbyId: string): Promise<LobbyState | null> {
     await this.maybeCompleteCountdown(lobbyId);
     const state = await this.buildLobbyState(lobbyId);
-    if (!state) return;
+    if (!state) return null;
     this.onBroadcast(lobbyId, "lobby:state", {
       lobbyId,
       players: state.players,
       status: state.status,
       countdownEndsAt: state.countdownEndsAt,
     });
+    return state;
   }
 
   private async maybeCompleteCountdown(lobbyId: string) {
@@ -313,8 +318,10 @@ export class LobbyManager {
         await this.memory.setPlayerSession(playerId, targetLobbyId);
       }
 
-      const updatedPlayers = await this.getPlayersMap(targetLobbyId);
-      const lobby = await this.getStoredLobby(targetLobbyId);
+      const [updatedPlayers, lobby] = await Promise.all([
+        this.getPlayersMap(targetLobbyId),
+        this.getStoredLobby(targetLobbyId),
+      ]);
 
       if (
         lobby &&
@@ -329,8 +336,7 @@ export class LobbyManager {
         await this.onStartRace(targetLobbyId);
       }
 
-      await this.broadcastState(targetLobbyId);
-      const state = await this.buildLobbyState(targetLobbyId);
+      const state = await this.broadcastState(targetLobbyId);
       if (!state) throw new Error("Failed to join lobby");
       return state;
     });
@@ -344,8 +350,7 @@ export class LobbyManager {
     if (!players.find((p) => p.playerId === playerId)) return null;
 
     await this.maybeCompleteCountdown(lobbyId);
-    await this.broadcastState(lobbyId);
-    return this.buildLobbyState(lobbyId);
+    return this.broadcastState(lobbyId);
   }
 
   async startRace(lobbyId: string) {
@@ -357,7 +362,7 @@ export class LobbyManager {
     const lobby = await this.getStoredLobby(lobbyId);
     if (!lobby || lobby.status === "racing" || lobby.status === "finished") return;
 
-    const snippet = await getRaceSnippet();
+    const snippet = await queryRaceSnippet();
     if (!snippet) return;
 
     lobby.status = "racing";
@@ -417,12 +422,14 @@ export class LobbyManager {
     const players = await this.getPlayersMap(lobbyId);
 
     if (this.redis) {
-      await this.redis.del(this.lobbyKey(lobbyId));
-      await this.redis.del(this.playersKey(lobbyId));
-      await this.redis.srem("lobbies:open", lobbyId);
-      await this.redis.del(this.countdownLockKey(lobbyId));
-      await this.redis.del(`lock:start:${lobbyId}`);
-      await Promise.all(players.map((p) => this.redis!.del(`player:${p.playerId}`)));
+      await Promise.all([
+        this.redis.del(this.lobbyKey(lobbyId)),
+        this.redis.del(this.playersKey(lobbyId)),
+        this.redis.srem("lobbies:open", lobbyId),
+        this.redis.del(this.countdownLockKey(lobbyId)),
+        this.redis.del(`lock:start:${lobbyId}`),
+        ...players.map((p) => this.redis!.del(`player:${p.playerId}`)),
+      ]);
     } else {
       for (const player of players) {
         await this.memory.deletePlayerSession(player.playerId);

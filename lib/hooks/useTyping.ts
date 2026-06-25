@@ -5,13 +5,16 @@ import { useAtom } from "jotai";
 import { initialTypingState, typingStateAtom } from "@/lib/atoms/game";
 import { calculateAccuracy, calculateWpm } from "@/lib/typing/metrics";
 
+type TypingStats = { wpm: number; accuracy: number; elapsedMs: number };
+
 type UseTypingOptions = {
   text: string;
   onProgress?: (index: number, wpm: number) => void;
+  onStatsChange?: (stats: TypingStats) => void;
   disabled?: boolean;
 };
 
-export function useTyping({ text, onProgress, disabled }: UseTypingOptions) {
+export function useTyping({ text, onProgress, onStatsChange, disabled }: UseTypingOptions) {
   const [state, setState] = useAtom(typingStateAtom);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -21,10 +24,14 @@ export function useTyping({ text, onProgress, disabled }: UseTypingOptions) {
   const lastEmitRef = useRef(0);
   const onProgressRef = useRef(onProgress);
   onProgressRef.current = onProgress;
+  const onStatsChangeRef = useRef(onStatsChange);
+  onStatsChangeRef.current = onStatsChange;
+  const lastStatsRef = useRef<TypingStats | null>(null);
 
   const reset = useCallback(() => {
     setState(initialTypingState);
     setErrorIndices(new Set());
+    lastStatsRef.current = null;
   }, [setState]);
 
   useEffect(() => {
@@ -51,6 +58,27 @@ export function useTyping({ text, onProgress, disabled }: UseTypingOptions) {
   const wpm = calculateWpm(state.correctKeystrokes, elapsedMs);
   const accuracy = calculateAccuracy(state.correctKeystrokes, state.totalKeystrokes);
   const isFinished = state.cursorIndex >= text.length && text.length > 0;
+
+  const notifyStats = useCallback(
+    (stats: TypingStats) => {
+      const prev = lastStatsRef.current;
+      if (
+        prev &&
+        prev.wpm === stats.wpm &&
+        prev.accuracy === stats.accuracy &&
+        prev.elapsedMs === stats.elapsedMs
+      ) {
+        return;
+      }
+      lastStatsRef.current = stats;
+      onStatsChangeRef.current?.(stats);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    notifyStats({ wpm, accuracy, elapsedMs });
+  }, [wpm, accuracy, elapsedMs, notifyStats]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
