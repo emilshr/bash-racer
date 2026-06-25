@@ -60,9 +60,7 @@
         "snippets_title_unique": {
           "name": "snippets_title_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "title"
-          ]
+          "columns": ["title"]
         }
       },
       "policies": {},

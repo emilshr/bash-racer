@@ -9,9 +9,7 @@ const noopStorage = {
 };
 
 const sessionStorage = <T>() =>
-  createJSONStorage<T>(() =>
-    typeof window !== "undefined" ? window.sessionStorage : noopStorage,
-  );
+  createJSONStorage<T>(() => (typeof window !== "undefined" ? window.sessionStorage : noopStorage));
 
 export const playerIdAtom = atomWithStorage<string>(
   `bash-racer-player-id:${STORAGE_VERSION}`,

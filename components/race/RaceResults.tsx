@@ -10,9 +10,7 @@ export function RaceResults() {
 
   if (standings.length === 0) return null;
 
-  const sorted = [...standings].sort(
-    (a, b) => b.progress - a.progress || b.wpm - a.wpm,
-  );
+  const sorted = [...standings].sort((a, b) => b.progress - a.progress || b.wpm - a.wpm);
 
   return (
     <Card className="mx-auto max-w-5xl">
@@ -26,9 +24,7 @@ export function RaceResults() {
               <Badge variant={i === 0 ? "default" : "outline"}>#{i + 1}</Badge>
               <span className="font-mono">{player.username}</span>
             </div>
-            <span className="font-mono tabular-nums text-muted-foreground">
-              {player.wpm} WPM
-            </span>
+            <span className="font-mono tabular-nums text-muted-foreground">{player.wpm} WPM</span>
           </div>
         ))}
       </CardContent>

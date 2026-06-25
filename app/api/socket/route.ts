@@ -1,8 +1,5 @@
 import { connection } from "next/server";
-import {
-  experimental_upgradeWebSocket,
-  type WebSocketData,
-} from "@vercel/functions";
+import { experimental_upgradeWebSocket, type WebSocketData } from "@vercel/functions";
 
 export const maxDuration = 300;
 

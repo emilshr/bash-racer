@@ -59,22 +59,19 @@ export function useTyping({ text, onProgress, onStatsChange, disabled }: UseTypi
   const accuracy = calculateAccuracy(state.correctKeystrokes, state.totalKeystrokes);
   const isFinished = state.cursorIndex >= text.length && text.length > 0;
 
-  const notifyStats = useCallback(
-    (stats: TypingStats) => {
-      const prev = lastStatsRef.current;
-      if (
-        prev &&
-        prev.wpm === stats.wpm &&
-        prev.accuracy === stats.accuracy &&
-        prev.elapsedMs === stats.elapsedMs
-      ) {
-        return;
-      }
-      lastStatsRef.current = stats;
-      onStatsChangeRef.current?.(stats);
-    },
-    [],
-  );
+  const notifyStats = useCallback((stats: TypingStats) => {
+    const prev = lastStatsRef.current;
+    if (
+      prev &&
+      prev.wpm === stats.wpm &&
+      prev.accuracy === stats.accuracy &&
+      prev.elapsedMs === stats.elapsedMs
+    ) {
+      return;
+    }
+    lastStatsRef.current = stats;
+    onStatsChangeRef.current?.(stats);
+  }, []);
 
   useEffect(() => {
     notifyStats({ wpm, accuracy, elapsedMs });
@@ -110,8 +107,7 @@ export function useTyping({ text, onProgress, onStatsChange, disabled }: UseTypi
       }
 
       const isPrintable =
-        e.key === "Enter" ||
-        (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey);
+        e.key === "Enter" || (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey);
       if (!isPrintable) return;
       e.preventDefault();
 

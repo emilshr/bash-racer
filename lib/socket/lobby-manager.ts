@@ -3,12 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { Snippet } from "@/lib/db/schema";
 import { queryRaceSnippet } from "@/lib/db/queries/snippets";
 import { getUpstashRedis } from "@/lib/redis/upstash";
-import {
-  LOBBY_CONSTANTS,
-  type LobbyState,
-  type LobbyStatus,
-  type PlayerState,
-} from "./events";
+import { LOBBY_CONSTANTS, type LobbyState, type LobbyStatus, type PlayerState } from "./events";
 
 type StoredLobby = {
   id: string;
@@ -197,10 +192,7 @@ export class LobbyManager {
       : await this.memory.getOpenLobbies();
 
     for (const id of openIds) {
-      const [lobby, players] = await Promise.all([
-        this.getStoredLobby(id),
-        this.getPlayersMap(id),
-      ]);
+      const [lobby, players] = await Promise.all([this.getStoredLobby(id), this.getPlayersMap(id)]);
       if (!lobby || lobby.status === "racing" || lobby.status === "finished") continue;
       if (players.length < LOBBY_CONSTANTS.MAX_PLAYERS) return id;
     }
@@ -247,7 +239,10 @@ export class LobbyManager {
 
   private scheduleCountdown(lobbyId: string) {
     const endsAt = Date.now() + LOBBY_CONSTANTS.LOBBY_TIMER_MS;
-    const timer = setTimeout(() => void this.onCountdownEnd(lobbyId), LOBBY_CONSTANTS.LOBBY_TIMER_MS);
+    const timer = setTimeout(
+      () => void this.onCountdownEnd(lobbyId),
+      LOBBY_CONSTANTS.LOBBY_TIMER_MS,
+    );
     this.memory.setTimer(lobbyId, timer);
 
     void (async () => {

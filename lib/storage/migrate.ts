@@ -5,11 +5,7 @@ const LEGACY_TO_VERSIONED = [
   { storage: "local", legacy: "bash-racer-mode", versioned: "bash-racer-mode:v1" },
 ] as const;
 
-function migrateKey(
-  storage: Storage,
-  legacyKey: string,
-  versionedKey: string,
-) {
+function migrateKey(storage: Storage, legacyKey: string, versionedKey: string) {
   const legacy = storage.getItem(legacyKey);
   if (legacy && !storage.getItem(versionedKey)) {
     storage.setItem(versionedKey, legacy);

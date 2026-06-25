@@ -39,9 +39,7 @@ export function LobbyStatus() {
   const now = useCountdownNow(ticking);
 
   const secondsLeft =
-    ticking && countdownEndsAt
-      ? Math.max(0, Math.ceil((countdownEndsAt - now) / 1000))
-      : null;
+    ticking && countdownEndsAt ? Math.max(0, Math.ceil((countdownEndsAt - now) / 1000)) : null;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 text-sm">

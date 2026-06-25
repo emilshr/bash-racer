@@ -6,7 +6,9 @@ import { seedSnippets } from "./seed-data/snippets";
 
 async function seed() {
   if (!env.DATABASE_URL) {
-    console.error("DATABASE_URL is required. Set it in .env.local or pass SKIP_ENV_VALIDATION only for schema tooling.");
+    console.error(
+      "DATABASE_URL is required. Set it in .env.local or pass SKIP_ENV_VALIDATION only for schema tooling.",
+    );
     process.exit(1);
   }
 

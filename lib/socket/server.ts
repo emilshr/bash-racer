@@ -6,8 +6,12 @@ import { env } from "@/lib/env";
 import { LobbyManager } from "./lobby-manager";
 import type { ClientToServerEvents, ServerToClientEvents, SocketData } from "./events";
 
-let io: Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData> | null =
-  null;
+let io: Server<
+  ClientToServerEvents,
+  ServerToClientEvents,
+  Record<string, never>,
+  SocketData
+> | null = null;
 let lobbyManager: LobbyManager | null = null;
 
 export function getIO() {

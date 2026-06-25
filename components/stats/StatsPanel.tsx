@@ -3,11 +3,7 @@
 import { HelpCircle } from "lucide-react";
 import { formatTime } from "@/lib/typing/metrics";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type StatsPanelProps = {
   wpm: number;
@@ -15,15 +11,7 @@ type StatsPanelProps = {
   elapsedMs: number;
 };
 
-function StatCard({
-  label,
-  value,
-  tooltip,
-}: {
-  label: string;
-  value: string;
-  tooltip: string;
-}) {
+function StatCard({ label, value, tooltip }: { label: string; value: string; tooltip: string }) {
   return (
     <Card className="flex-1">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -50,8 +38,16 @@ export function StatsPanel({ wpm, accuracy, elapsedMs }: StatsPanelProps) {
         value={String(wpm)}
         tooltip="Words per minute — 5 characters = 1 word"
       />
-      <StatCard label="Accuracy" value={`${accuracy}%`} tooltip="Correct keystrokes / total keystrokes" />
-      <StatCard label="Time" value={formatTime(elapsedMs)} tooltip="Elapsed time since first keystroke" />
+      <StatCard
+        label="Accuracy"
+        value={`${accuracy}%`}
+        tooltip="Correct keystrokes / total keystrokes"
+      />
+      <StatCard
+        label="Time"
+        value={formatTime(elapsedMs)}
+        tooltip="Elapsed time since first keystroke"
+      />
     </div>
   );
 }
