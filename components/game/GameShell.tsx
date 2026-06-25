@@ -11,6 +11,7 @@ import {
 } from "@/lib/atoms/game";
 import { playerIdAtom } from "@/lib/atoms/session";
 import { getRandomSnippet } from "@/lib/actions/snippets";
+import { Loader2 } from "lucide-react";
 import { AppHeader } from "@/components/header/AppHeader";
 import { MacTerminal } from "@/components/terminal/MacTerminal";
 import { TypingSurface } from "@/components/terminal/TypingSurface";
@@ -33,7 +34,7 @@ export function GameShell() {
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({ wpm: 0, accuracy: 100, elapsedMs: 0 });
   const [snippetKey, setSnippetKey] = useState(0);
-  const emitProgressRef = useRef<(index: number, wpm: number) => void>(() => {});
+  const emitProgressRef = useRef<(index: number, wpm: number) => void>(() => { });
 
   const isOnline = mode === "online";
 
@@ -58,7 +59,7 @@ export function GameShell() {
   }, [setOfflineSnippet]);
 
   return (
-    <div className="flex min-h-full flex-1 flex-col gap-4 py-4">
+    <div className="flex min-h-full flex-1 flex-col gap-4">
       <AppHeader />
 
       {isOnline && (
@@ -90,6 +91,7 @@ export function GameShell() {
       {!isOnline && (
         <div className="mx-auto flex w-full max-w-5xl justify-center px-4">
           <Button variant="outline" onClick={() => void loadOfflineSnippet()} disabled={loading}>
+            {loading && <Loader2 className="animate-spin" />}
             New snippet
           </Button>
         </div>

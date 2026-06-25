@@ -28,15 +28,58 @@ function renderTypedSegments(text: string, cursorIndex: number, errorIndices: Se
     i = j;
   }
 
-  if (cursorIndex < text.length) {
-    segments.push({
-      key: "remaining",
-      text: text.slice(cursorIndex),
-      className: "text-terminal-muted",
-    });
+  return segments;
+}
+
+function CursorCell({
+  showCursor,
+  children,
+}: {
+  showCursor: boolean;
+  children?: string;
+}) {
+  return (
+    <span className="relative inline-block min-w-[1ch] leading-none text-terminal-muted">
+      {showCursor && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 -top-px -bottom-0.5 bg-terminal-fg animate-terminal-cursor-blink"
+        />
+      )}
+      <span className="relative">{children ?? "\u00A0"}</span>
+    </span>
+  );
+}
+
+function renderRemainingWithCursor(remainingText: string, showCursor: boolean) {
+  if (!showCursor) {
+    return remainingText ? <span className="text-terminal-muted">{remainingText}</span> : null;
   }
 
-  return segments;
+  if (remainingText.length === 0) {
+    return <CursorCell showCursor />;
+  }
+
+  if (remainingText[0] === "\n") {
+    return (
+      <>
+        <CursorCell showCursor />
+        {"\n"}
+        {remainingText.length > 1 && (
+          <span className="text-terminal-muted">{remainingText.slice(1)}</span>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <CursorCell showCursor>{remainingText[0]}</CursorCell>
+      {remainingText.length > 1 && (
+        <span className="text-terminal-muted">{remainingText.slice(1)}</span>
+      )}
+    </>
+  );
 }
 
 export function TypingSurface({
@@ -72,17 +115,20 @@ export function TypingSurface({
     );
   }
 
-  const segments = renderTypedSegments(text, state.cursorIndex, errorIndices);
+  const typedSegments = renderTypedSegments(text, state.cursorIndex, errorIndices);
+  const remainingText = state.cursorIndex < text.length ? text.slice(state.cursorIndex) : "";
+  const showCursor = !disabled && !isFinished;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" onClick={focus}>
       <ScrollArea className="flex-1 p-4">
         <pre className="whitespace-pre-wrap break-all leading-relaxed">
-          {segments.map((segment) => (
+          {typedSegments.map((segment) => (
             <span key={segment.key} className={cn(segment.className)}>
               {segment.text}
             </span>
           ))}
+          {renderRemainingWithCursor(remainingText, showCursor)}
         </pre>
       </ScrollArea>
       <textarea

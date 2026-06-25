@@ -8,7 +8,7 @@ export function GameShellSkeleton() {
         <Skeleton className="h-9 w-48" />
         <Skeleton className="h-6 w-24" />
       </div>
-      <div className="mx-auto flex h-[70vh] w-full max-w-5xl flex-col gap-0 overflow-hidden rounded-xl border border-border">
+      <div className="mx-auto flex h-[70vh] w-[80vw] flex-col gap-0 overflow-hidden rounded-xl border border-border">
         <Skeleton className="h-10 w-full rounded-none" />
         <div className="flex flex-1 flex-col gap-2 p-4">
           {Array.from({ length: 8 }).map((_, i) => (

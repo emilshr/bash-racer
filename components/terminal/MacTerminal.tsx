@@ -11,7 +11,7 @@ export function MacTerminal({ title = "bash — zsh", children, className }: Mac
   return (
     <Card
       className={cn(
-        "mx-auto flex h-[70vh] max-w-5xl flex-col gap-0 overflow-hidden p-0",
+        "mx-auto flex h-[70vh] w-[80vw] flex-col gap-0 overflow-hidden p-0",
         className,
       )}
     >
