@@ -28,9 +28,12 @@ export function useTyping({ text, onProgress, onStatsChange, disabled }: UseTypi
   onStatsChangeRef.current = onStatsChange;
   const lastStatsRef = useRef<TypingStats | null>(null);
 
+  const [elapsedMs, setElapsedMs] = useState(0);
+
   const reset = useCallback(() => {
     setState(initialTypingState);
     setErrorIndices(new Set());
+    setElapsedMs(0);
     lastStatsRef.current = null;
   }, [setState]);
 
@@ -38,22 +41,20 @@ export function useTyping({ text, onProgress, onStatsChange, disabled }: UseTypi
     reset();
   }, [text, reset]);
 
-  const [tick, setTick] = useState(0);
-
   useEffect(() => {
-    if (!state.startedAt || state.finishedAt) return;
-    const id = setInterval(() => setTick((t) => t + 1), 250);
+    if (!state.startedAt) {
+      setElapsedMs(0);
+      return;
+    }
+    if (state.finishedAt) {
+      setElapsedMs(state.finishedAt - state.startedAt);
+      return;
+    }
+    const update = () => setElapsedMs(Date.now() - state.startedAt!);
+    update();
+    const id = setInterval(update, 250);
     return () => clearInterval(id);
   }, [state.startedAt, state.finishedAt]);
-
-  const elapsedMs =
-    state.startedAt && !state.finishedAt
-      ? Date.now() - state.startedAt
-      : state.finishedAt && state.startedAt
-        ? state.finishedAt - state.startedAt
-        : 0;
-
-  void tick;
 
   const wpm = calculateWpm(state.correctKeystrokes, elapsedMs);
   const accuracy = calculateAccuracy(state.correctKeystrokes, state.totalKeystrokes);
@@ -154,7 +155,9 @@ export function useTyping({ text, onProgress, onStatsChange, disabled }: UseTypi
     [disabled, text, setState],
   );
 
-  const focus = () => inputRef.current?.focus();
+  const focus = useCallback(() => {
+    inputRef.current?.focus();
+  }, []);
 
   return {
     state,

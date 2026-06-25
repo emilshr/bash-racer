@@ -89,6 +89,7 @@ export function TypingSurface({
         ref={inputRef}
         className="absolute inset-0 cursor-text resize-none opacity-0"
         value=""
+        readOnly
         onKeyDown={handleKeyDown}
         autoComplete="off"
         autoCorrect="off"
