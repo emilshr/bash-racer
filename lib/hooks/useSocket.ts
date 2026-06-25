@@ -21,6 +21,9 @@ export function useSocket(enabled: boolean) {
   const [playerId, setPlayerId] = useAtom(playerIdAtom);
   const [username, setUsername] = useAtom(usernameAtom);
   const [playerSession, setPlayerSession] = useAtom(playerSessionAtom);
+  const playerSessionRef = useRef(playerSession);
+  playerSessionRef.current = playerSession;
+
   const setRaceProgress = useSetAtom(raceProgressAtom);
   const setLobbyStatus = useSetAtom(lobbyStatusAtom);
   const setCountdownEndsAt = useSetAtom(lobbyCountdownEndsAtAtom);
@@ -54,10 +57,11 @@ export function useSocket(enabled: boolean) {
 
     socket.on("connect", () => {
       setConnected(true);
-      if (playerSession?.lobbyId) {
+      const session = playerSessionRef.current;
+      if (session?.lobbyId) {
         socket.emit("lobby:rejoin", {
-          playerId: playerSession.playerId,
-          lobbyId: playerSession.lobbyId,
+          playerId: session.playerId,
+          lobbyId: session.lobbyId,
         });
       } else {
         socket.emit("lobby:join", { playerId: id, username: name });
@@ -65,7 +69,10 @@ export function useSocket(enabled: boolean) {
     });
 
     socket.on("lobby:state", (data) => {
-      setPlayerSession({ playerId: id, lobbyId: data.lobbyId });
+      setPlayerSession((prev) => {
+        if (prev?.lobbyId === data.lobbyId && prev?.playerId === id) return prev;
+        return { playerId: id, lobbyId: data.lobbyId };
+      });
       setRaceProgress(data.players);
       setLobbyStatus(data.status as LobbyStatus);
       setCountdownEndsAt(data.countdownEndsAt);
@@ -108,7 +115,6 @@ export function useSocket(enabled: boolean) {
     enabled,
     playerId,
     username,
-    playerSession,
     setPlayerId,
     setUsername,
     setPlayerSession,
@@ -121,8 +127,8 @@ export function useSocket(enabled: boolean) {
 
   const emitProgress = (index: number, wpm: number) => {
     const socket = socketRef.current;
-    if (socket?.connected && playerId) {
-      socket.emit("race:progress", { playerId, index, wpm });
+    if (socket?.connected) {
+      socket.emit("race:progress", { index, wpm });
     }
   };
 

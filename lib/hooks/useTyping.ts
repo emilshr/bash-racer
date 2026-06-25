@@ -13,9 +13,14 @@ type UseTypingOptions = {
 
 export function useTyping({ text, onProgress, disabled }: UseTypingOptions) {
   const [state, setState] = useAtom(typingStateAtom);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   const [errorIndices, setErrorIndices] = useState<Set<number>>(new Set());
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastEmitRef = useRef(0);
+  const onProgressRef = useRef(onProgress);
+  onProgressRef.current = onProgress;
 
   const reset = useCallback(() => {
     setState(initialTypingState);
@@ -49,38 +54,57 @@ export function useTyping({ text, onProgress, disabled }: UseTypingOptions) {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (disabled || !text || state.finishedAt) return;
+      if (disabled || !text || stateRef.current.finishedAt) return;
 
       if (e.key === "Backspace") {
         e.preventDefault();
-        if (state.cursorIndex === 0) return;
+        const current = stateRef.current;
+        if (current.cursorIndex === 0) return;
 
-        const newIndex = state.cursorIndex - 1;
-        const newTyped = state.typedChars.slice(0, -1);
-        const newErrors = new Set(errorIndices);
-        newErrors.delete(newIndex);
+        const removedIndex = current.cursorIndex - 1;
+        const removedChar = current.typedChars[removedIndex];
+        const wasCorrect = removedChar === text[removedIndex];
 
-        setErrorIndices(newErrors);
+        setErrorIndices((errs) => {
+          const next = new Set(errs);
+          next.delete(removedIndex);
+          return next;
+        });
         setState((prev) => ({
           ...prev,
-          cursorIndex: newIndex,
-          typedChars: newTyped,
+          cursorIndex: removedIndex,
+          typedChars: prev.typedChars.slice(0, -1),
+          totalKeystrokes: Math.max(0, prev.totalKeystrokes - 1),
+          correctKeystrokes: Math.max(0, prev.correctKeystrokes - (wasCorrect ? 1 : 0)),
+          finishedAt: null,
         }));
         return;
       }
 
-      if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+      const isPrintable =
+        e.key === "Enter" ||
+        (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey);
+      if (!isPrintable) return;
       e.preventDefault();
 
-      const char = e.key;
-      const expected = text[state.cursorIndex];
-      const isCorrect = char === expected;
+      const char = e.key === "Enter" ? "\n" : e.key;
       const now = Date.now();
+      const cursorIndex = stateRef.current.cursorIndex;
+      const expected = text[cursorIndex];
+      const isCorrect = char === expected;
 
       setState((prev) => {
         const startedAt = prev.startedAt ?? now;
         const newIndex = prev.cursorIndex + 1;
+        const newCorrect = prev.correctKeystrokes + (isCorrect ? 1 : 0);
         const finished = newIndex >= text.length;
+        const elapsed = now - startedAt;
+        const currentWpm = calculateWpm(newCorrect, elapsed);
+
+        if (onProgressRef.current && (finished || now - lastEmitRef.current > 100)) {
+          lastEmitRef.current = now;
+          queueMicrotask(() => onProgressRef.current?.(newIndex, currentWpm));
+        }
 
         return {
           ...prev,
@@ -88,33 +112,22 @@ export function useTyping({ text, onProgress, disabled }: UseTypingOptions) {
           cursorIndex: newIndex,
           typedChars: [...prev.typedChars, char],
           totalKeystrokes: prev.totalKeystrokes + 1,
-          correctKeystrokes: prev.correctKeystrokes + (isCorrect ? 1 : 0),
+          correctKeystrokes: newCorrect,
           finishedAt: finished ? now : null,
         };
       });
 
       if (!isCorrect) {
-        setErrorIndices((prev) => new Set(prev).add(state.cursorIndex));
+        setErrorIndices((prev) => new Set(prev).add(cursorIndex));
       } else {
         setErrorIndices((prev) => {
           const next = new Set(prev);
-          next.delete(state.cursorIndex);
+          next.delete(cursorIndex);
           return next;
         });
       }
-
-      const newIndex = state.cursorIndex + 1;
-      const newCorrect = state.correctKeystrokes + (isCorrect ? 1 : 0);
-      const started = state.startedAt ?? now;
-      const elapsed = now - started;
-      const currentWpm = calculateWpm(newCorrect, elapsed);
-
-      if (onProgress && now - lastEmitRef.current > 100) {
-        lastEmitRef.current = now;
-        onProgress(newIndex, currentWpm);
-      }
     },
-    [disabled, text, state, errorIndices, onProgress, setState],
+    [disabled, text, setState],
   );
 
   const focus = () => inputRef.current?.focus();

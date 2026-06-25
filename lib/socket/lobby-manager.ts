@@ -18,6 +18,12 @@ type StoredLobby = {
   snippet: Snippet | null;
 };
 
+function parseStoredJson<T>(raw: unknown): T | null {
+  if (raw == null) return null;
+  if (typeof raw === "string") return JSON.parse(raw) as T;
+  return raw as T;
+}
+
 class MemoryStore {
   private lobbies = new Map<string, StoredLobby>();
   private players = new Map<string, Map<string, PlayerState>>();
@@ -31,6 +37,13 @@ class MemoryStore {
 
   async setLobby(lobby: StoredLobby) {
     this.lobbies.set(lobby.id, lobby);
+  }
+
+  async deleteLobby(id: string) {
+    this.lobbies.delete(id);
+    this.players.delete(id);
+    this.openLobbies.delete(id);
+    this.clearTimer(id);
   }
 
   async getPlayers(lobbyId: string): Promise<Map<string, PlayerState>> {
@@ -93,10 +106,37 @@ export class LobbyManager {
     return `lobby:${id}:players`;
   }
 
+  private countdownLockKey(id: string) {
+    return `lock:countdown:${id}`;
+  }
+
+  private lobbyLockKey(id: string) {
+    return `lock:lobby:${id}`;
+  }
+
+  private async withLobbyLock<T>(lobbyId: string, fn: () => Promise<T>): Promise<T> {
+    if (!this.redis) return fn();
+
+    const lockKey = this.lobbyLockKey(lobbyId);
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const acquired = await this.redis.set(lockKey, "1", { nx: true, ex: 5 });
+      if (acquired) {
+        try {
+          return await fn();
+        } finally {
+          await this.redis.del(lockKey);
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+    }
+
+    throw new Error("Could not acquire lobby lock");
+  }
+
   private async getStoredLobby(id: string): Promise<StoredLobby | null> {
     if (this.redis) {
-      const raw = await this.redis.get<string>(this.lobbyKey(id));
-      return raw ? JSON.parse(raw) : null;
+      const raw = await this.redis.get(this.lobbyKey(id));
+      return parseStoredJson<StoredLobby>(raw);
     }
     return this.memory.getLobby(id);
   }
@@ -115,7 +155,7 @@ export class LobbyManager {
     if (this.redis) {
       const raw = await this.redis.hgetall<Record<string, string>>(this.playersKey(lobbyId));
       if (!raw) return [];
-      return Object.values(raw).map((v) => JSON.parse(v));
+      return Object.values(raw).map((v) => parseStoredJson<PlayerState>(v)!);
     }
     const map = await this.memory.getPlayers(lobbyId);
     return [...map.values()];
@@ -182,6 +222,7 @@ export class LobbyManager {
   }
 
   private async broadcastState(lobbyId: string) {
+    await this.maybeCompleteCountdown(lobbyId);
     const state = await this.buildLobbyState(lobbyId);
     if (!state) return;
     this.onBroadcast(lobbyId, "lobby:state", {
@@ -192,15 +233,22 @@ export class LobbyManager {
     });
   }
 
+  private async maybeCompleteCountdown(lobbyId: string) {
+    const lobby = await this.getStoredLobby(lobbyId);
+    if (!lobby || lobby.status !== "countdown" || !lobby.countdownEndsAt) return;
+    if (Date.now() < lobby.countdownEndsAt) return;
+    await this.onCountdownEnd(lobbyId);
+  }
+
   private scheduleCountdown(lobbyId: string) {
     const endsAt = Date.now() + LOBBY_CONSTANTS.LOBBY_TIMER_MS;
     const timer = setTimeout(() => void this.onCountdownEnd(lobbyId), LOBBY_CONSTANTS.LOBBY_TIMER_MS);
-
-    if (!this.redis) this.memory.setTimer(lobbyId, timer);
+    this.memory.setTimer(lobbyId, timer);
 
     void (async () => {
       const lobby = await this.getStoredLobby(lobbyId);
-      if (!lobby) return;
+      if (!lobby || lobby.status !== "waiting") return;
+
       lobby.status = "countdown";
       lobby.countdownEndsAt = endsAt;
       await this.saveLobby(lobby);
@@ -210,8 +258,19 @@ export class LobbyManager {
   }
 
   private async onCountdownEnd(lobbyId: string) {
+    if (this.redis) {
+      const acquired = await this.redis.set(this.countdownLockKey(lobbyId), "1", {
+        nx: true,
+        ex: 60,
+      });
+      if (!acquired) return;
+    } else {
+      this.memory.clearTimer(lobbyId);
+    }
+
     const lobby = await this.getStoredLobby(lobbyId);
     if (!lobby || lobby.status !== "countdown") return;
+    if (lobby.countdownEndsAt && Date.now() < lobby.countdownEndsAt - 50) return;
 
     const players = await this.getPlayersMap(lobbyId);
     if (players.length >= LOBBY_CONSTANTS.MIN_PLAYERS) {
@@ -228,45 +287,53 @@ export class LobbyManager {
     let lobbyId = await this.findOpenLobby();
     if (!lobbyId) lobbyId = await this.createLobby();
 
-    const players = await this.getPlayersMap(lobbyId);
-    const existing = players.find((p) => p.playerId === playerId);
-    if (!existing) {
-      if (players.length >= LOBBY_CONSTANTS.MAX_PLAYERS) {
-        lobbyId = await this.createLobby();
+    return this.withLobbyLock(lobbyId, async () => {
+      let targetLobbyId = lobbyId;
+      const players = await this.getPlayersMap(targetLobbyId);
+      const existing = players.find((p) => p.playerId === playerId);
+
+      if (!existing) {
+        if (players.length >= LOBBY_CONSTANTS.MAX_PLAYERS) {
+          targetLobbyId = await this.createLobby();
+        }
+        await this.setPlayer(targetLobbyId, {
+          playerId,
+          username,
+          progress: 0,
+          wpm: 0,
+          finished: false,
+        });
       }
-      await this.setPlayer(lobbyId, {
-        playerId,
-        username,
-        progress: 0,
-        wpm: 0,
-        finished: false,
-      });
-    }
 
-    if (this.redis) {
-      await this.redis.set(`player:${playerId}`, JSON.stringify({ lobbyId }), {
-        ex: LOBBY_CONSTANTS.LOBBY_TTL_SEC,
-      });
-    } else {
-      await this.memory.setPlayerSession(playerId, lobbyId);
-    }
+      if (this.redis) {
+        await this.redis.set(`player:${playerId}`, JSON.stringify({ lobbyId: targetLobbyId }), {
+          ex: LOBBY_CONSTANTS.LOBBY_TTL_SEC,
+        });
+      } else {
+        await this.memory.setPlayerSession(playerId, targetLobbyId);
+      }
 
-    const updatedPlayers = await this.getPlayersMap(lobbyId);
-    const lobby = await this.getStoredLobby(lobbyId);
+      const updatedPlayers = await this.getPlayersMap(targetLobbyId);
+      const lobby = await this.getStoredLobby(targetLobbyId);
 
-    if (lobby && lobby.status === "waiting" && updatedPlayers.length >= LOBBY_CONSTANTS.MIN_PLAYERS) {
-      this.scheduleCountdown(lobbyId);
-    }
+      if (
+        lobby &&
+        lobby.status === "waiting" &&
+        updatedPlayers.length >= LOBBY_CONSTANTS.MIN_PLAYERS
+      ) {
+        this.scheduleCountdown(targetLobbyId);
+      }
 
-    if (updatedPlayers.length >= LOBBY_CONSTANTS.MAX_PLAYERS && lobby?.status === "countdown") {
-      if (!this.redis) this.memory.clearTimer(lobbyId);
-      await this.onStartRace(lobbyId);
-    }
+      if (updatedPlayers.length >= LOBBY_CONSTANTS.MAX_PLAYERS && lobby?.status === "countdown") {
+        this.memory.clearTimer(targetLobbyId);
+        await this.onStartRace(targetLobbyId);
+      }
 
-    await this.broadcastState(lobbyId);
-    const state = await this.buildLobbyState(lobbyId);
-    if (!state) throw new Error("Failed to join lobby");
-    return state;
+      await this.broadcastState(targetLobbyId);
+      const state = await this.buildLobbyState(targetLobbyId);
+      if (!state) throw new Error("Failed to join lobby");
+      return state;
+    });
   }
 
   async rejoinLobby(playerId: string, lobbyId: string): Promise<LobbyState | null> {
@@ -276,13 +343,19 @@ export class LobbyManager {
     const players = await this.getPlayersMap(lobbyId);
     if (!players.find((p) => p.playerId === playerId)) return null;
 
+    await this.maybeCompleteCountdown(lobbyId);
     await this.broadcastState(lobbyId);
     return this.buildLobbyState(lobbyId);
   }
 
   async startRace(lobbyId: string) {
+    if (this.redis) {
+      const acquired = await this.redis.set(`lock:start:${lobbyId}`, "1", { nx: true, ex: 60 });
+      if (!acquired) return;
+    }
+
     const lobby = await this.getStoredLobby(lobbyId);
-    if (!lobby || lobby.status === "racing") return;
+    if (!lobby || lobby.status === "racing" || lobby.status === "finished") return;
 
     const snippet = await getRaceSnippet();
     if (!snippet) return;
@@ -292,6 +365,8 @@ export class LobbyManager {
     lobby.countdownEndsAt = null;
     lobby.snippet = snippet;
     await this.saveLobby(lobby);
+
+    this.memory.clearTimer(lobbyId);
 
     if (this.redis) await this.redis.srem("lobbies:open", lobbyId);
     else await this.memory.removeOpenLobby(lobbyId);
@@ -325,7 +400,7 @@ export class LobbyManager {
 
   async endRace(lobbyId: string) {
     const lobby = await this.getStoredLobby(lobbyId);
-    if (!lobby) return;
+    if (!lobby || lobby.status === "finished") return;
 
     lobby.status = "finished";
     await this.saveLobby(lobby);
@@ -339,17 +414,46 @@ export class LobbyManager {
   }
 
   async cleanupLobby(lobbyId: string) {
+    const players = await this.getPlayersMap(lobbyId);
+
     if (this.redis) {
       await this.redis.del(this.lobbyKey(lobbyId));
       await this.redis.del(this.playersKey(lobbyId));
       await this.redis.srem("lobbies:open", lobbyId);
+      await this.redis.del(this.countdownLockKey(lobbyId));
+      await this.redis.del(`lock:start:${lobbyId}`);
+      await Promise.all(players.map((p) => this.redis!.del(`player:${p.playerId}`)));
+    } else {
+      for (const player of players) {
+        await this.memory.deletePlayerSession(player.playerId);
+      }
+      await this.memory.deleteLobby(lobbyId);
     }
   }
 
   async leaveLobby(lobbyId: string, playerId: string) {
-    await this.removePlayer(lobbyId, playerId);
-    if (!this.redis) await this.memory.deletePlayerSession(playerId);
-    else await this.redis.del(`player:${playerId}`);
-    await this.broadcastState(lobbyId);
+    await this.withLobbyLock(lobbyId, async () => {
+      await this.removePlayer(lobbyId, playerId);
+
+      if (!this.redis) await this.memory.deletePlayerSession(playerId);
+      else await this.redis.del(`player:${playerId}`);
+
+      const lobby = await this.getStoredLobby(lobbyId);
+      const players = await this.getPlayersMap(lobbyId);
+
+      if (players.length === 0) {
+        await this.cleanupLobby(lobbyId);
+        return;
+      }
+
+      if (lobby?.status === "countdown" && players.length < LOBBY_CONSTANTS.MIN_PLAYERS) {
+        lobby.status = "waiting";
+        lobby.countdownEndsAt = null;
+        await this.saveLobby(lobby);
+        this.memory.clearTimer(lobbyId);
+      }
+
+      await this.broadcastState(lobbyId);
+    });
   }
 }

@@ -1,7 +1,6 @@
 "use server";
 
 import { sql } from "drizzle-orm";
-import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/lib/db";
 import { snippets, type Snippet } from "@/lib/db/schema";
 import { LOBBY_CONSTANTS } from "@/lib/socket/events";
@@ -17,9 +16,6 @@ async function fetchRandomSnippetFromDb(maxChars?: number): Promise<Snippet | nu
 }
 
 export async function getRandomSnippet(): Promise<Snippet | null> {
-  "use cache";
-  cacheLife("hours");
-  cacheTag("snippets");
   return fetchRandomSnippetFromDb();
 }
 

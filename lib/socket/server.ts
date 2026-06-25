@@ -91,10 +91,21 @@ export function initSocketServer(httpServer: HttpServer) {
       }
     });
 
-    socket.on("race:progress", async ({ playerId, index, wpm }) => {
+    socket.on("race:progress", async ({ index, wpm }) => {
       const lobbyId = socket.data.lobbyId;
-      if (!lobbyId) return;
+      const playerId = socket.data.playerId;
+      if (!lobbyId || !playerId) return;
       await lobbyManager!.updateProgress(lobbyId, playerId, index, wpm);
+    });
+
+    socket.on("disconnect", async () => {
+      const { playerId, lobbyId } = socket.data;
+      if (!playerId || !lobbyId) return;
+
+      const state = await lobbyManager!.buildLobbyState(lobbyId);
+      if (!state || state.status === "racing" || state.status === "finished") return;
+
+      await lobbyManager!.leaveLobby(lobbyId, playerId);
     });
   });
 

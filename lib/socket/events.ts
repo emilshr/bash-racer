@@ -30,7 +30,7 @@ export type LobbyState = {
 export type ClientToServerEvents = {
   "lobby:join": (data: { playerId: string; username: string }) => void;
   "lobby:rejoin": (data: { playerId: string; lobbyId: string }) => void;
-  "race:progress": (data: { playerId: string; index: number; wpm: number }) => void;
+  "race:progress": (data: { index: number; wpm: number }) => void;
 };
 
 export type ServerToClientEvents = {
