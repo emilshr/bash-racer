@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { CommandSession } from "@/lib/atoms/game";
@@ -9,8 +9,8 @@ import { useTyping } from "@/lib/hooks/useTyping";
 import { ShellPrompt } from "@/components/terminal/ShellPrompt";
 
 type TypingSurfaceProps = {
+  mode: "online" | "practice";
   username?: string;
-  branch?: string;
   loading?: boolean;
   disabled?: boolean;
   text?: string;
@@ -102,20 +102,53 @@ function renderCommandLine(
   return nodes;
 }
 
+const CompletedCommandLine = memo(function CompletedCommandLine({
+  command,
+  typedChars,
+  errorIndices,
+  username,
+}: {
+  command: string;
+  typedChars: string[];
+  errorIndices: number[];
+  username: string;
+}) {
+  return (
+    <div className="leading-relaxed">
+      <ShellPrompt username={username} />
+      {renderCommandLine(command, typedChars, command.length, errorIndices, false, false)}
+    </div>
+  );
+});
+
+const FutureCommandLine = memo(function FutureCommandLine({
+  command,
+  username,
+}: {
+  command: string;
+  username: string;
+}) {
+  return (
+    <div className="leading-relaxed">
+      <ShellPrompt username={username} />
+      {renderCommandLine(command, [], 0, [], false, true)}
+    </div>
+  );
+});
+
 function SessionLines({
   session,
   username,
-  branch,
   typing,
   showCursor,
 }: {
   session: CommandSession;
   username: string;
-  branch: string;
   typing: ReturnType<typeof useTyping>;
   showCursor: boolean;
 }) {
   const activeLineRef = useRef<HTMLDivElement>(null);
+  const { state, errorIndices } = typing;
 
   useEffect(() => {
     activeLineRef.current?.scrollIntoView({ block: "nearest" });
@@ -124,32 +157,33 @@ function SessionLines({
   return (
     <>
       {session.commands.map((command, index) => {
-        const isCompleted = index < session.activeIndex;
-        const isActive = index === session.activeIndex;
-        const isFuture = index > session.activeIndex;
+        if (index < session.activeIndex) {
+          return (
+            <CompletedCommandLine
+              key={`${index}-${command}`}
+              command={command}
+              typedChars={session.completedTyped[index] ?? []}
+              errorIndices={session.completedErrors[index] ?? []}
+              username={username}
+            />
+          );
+        }
+
+        if (index > session.activeIndex) {
+          return <FutureCommandLine key={`${index}-${command}`} command={command} username={username} />;
+        }
 
         return (
-          <div key={`${index}-${command}`} ref={isActive ? activeLineRef : undefined} className="leading-relaxed">
-            <ShellPrompt username={username} branch={branch} />
-            {isCompleted &&
-              renderCommandLine(
-                command,
-                session.completedTyped[index] ?? [],
-                command.length,
-                session.completedErrors[index] ?? [],
-                false,
-                false,
-              )}
-            {isActive &&
-              renderCommandLine(
-                command,
-                typing.state.typedChars,
-                typing.state.cursorIndex,
-                typing.errorIndices,
-                showCursor,
-                false,
-              )}
-            {isFuture && renderCommandLine(command, [], 0, [], false, true)}
+          <div key={`${index}-${command}`} ref={activeLineRef} className="leading-relaxed">
+            <ShellPrompt username={username} />
+            {renderCommandLine(
+              command,
+              state.typedChars,
+              state.cursorIndex,
+              errorIndices,
+              showCursor,
+              false,
+            )}
           </div>
         );
       })}
@@ -160,7 +194,6 @@ function SessionLines({
 function SingleLineSurface({
   text,
   username,
-  branch,
   loading,
   disabled,
   onProgress,
@@ -169,19 +202,19 @@ function SingleLineSurface({
 }: {
   text: string;
   username: string;
-  branch: string;
   loading?: boolean;
   disabled?: boolean;
   onProgress?: (index: number, wpm: number) => void;
   onFinish?: () => void;
   onStatsChange?: (stats: { wpm: number; accuracy: number; elapsedMs: number }) => void;
 }) {
-  const { state, errorIndices, inputRef, handleKeyDown, isFinished, focus } = useTyping({
-    text,
-    onProgress,
-    onStatsChange,
-    disabled: disabled || loading,
-  });
+  const { state, errorIndices, inputRef, handleKeyDown, isFinished, focus, wpm, accuracy } =
+    useTyping({
+      text,
+      onProgress,
+      onStatsChange,
+      disabled: disabled || loading,
+    });
 
   useEffect(() => {
     if (!loading && text) focus();
@@ -195,9 +228,12 @@ function SingleLineSurface({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" onClick={focus}>
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {wpm} WPM, {accuracy}% accuracy
+      </div>
       <ScrollArea className="flex-1 p-4">
         <pre className="whitespace-pre-wrap break-all leading-relaxed font-mono text-sm">
-          <ShellPrompt username={username} branch={branch} />
+          <ShellPrompt username={username} />
           {renderCommandLine(
             text,
             state.typedChars,
@@ -226,13 +262,11 @@ function SingleLineSurface({
 
 function SessionSurface({
   username,
-  branch,
   loading,
   disabled,
   onStatsChange,
 }: {
   username: string;
-  branch: string;
   loading?: boolean;
   disabled?: boolean;
   onStatsChange?: (stats: { wpm: number; accuracy: number; elapsedMs: number }) => void;
@@ -242,33 +276,45 @@ function SessionSurface({
     disabled: disabled || loading,
   });
 
+  const { focus, inputRef, handleKeyDown, wpm, accuracy } = typing;
+
   useEffect(() => {
-    if (!loading && session) typing.focus();
-  }, [loading, session, session?.activeIndex, typing]);
+    if (!loading && session) focus();
+  }, [loading, session?.activeIndex, focus, session]);
 
   if (!session) return null;
+
+  if (session.commands.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-4 text-sm text-muted-foreground">
+        No practice commands available. Run pnpm db:seed and start a new session.
+      </div>
+    );
+  }
 
   const showCursor = !disabled && !isSessionFinished && !loading;
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col" onClick={typing.focus}>
+    <div className="relative flex min-h-0 flex-1 flex-col" onClick={focus}>
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {wpm} WPM, {accuracy}% accuracy
+      </div>
       <ScrollArea className="flex-1 p-4">
         <div className="whitespace-pre-wrap break-all font-mono text-sm">
           <SessionLines
             session={session}
             username={username}
-            branch={branch}
             typing={typing}
             showCursor={showCursor}
           />
         </div>
       </ScrollArea>
       <textarea
-        ref={typing.inputRef}
+        ref={inputRef}
         className="absolute inset-0 cursor-text resize-none opacity-0"
         value=""
         readOnly
-        onKeyDown={typing.handleKeyDown}
+        onKeyDown={handleKeyDown}
         autoComplete="off"
         autoCorrect="off"
         autoCapitalize="off"
@@ -280,8 +326,8 @@ function SessionSurface({
 }
 
 export function TypingSurface({
+  mode,
   username = "",
-  branch = "practice",
   loading,
   disabled,
   text,
@@ -299,13 +345,13 @@ export function TypingSurface({
     );
   }
 
-  if (text) {
+  if (mode === "online") {
+    if (!text) return null;
+
     return (
       <SingleLineSurface
         text={text}
         username={username}
-        branch={branch}
-        loading={loading}
         disabled={disabled}
         onProgress={onProgress}
         onFinish={onFinish}
@@ -317,8 +363,6 @@ export function TypingSurface({
   return (
     <SessionSurface
       username={username}
-      branch={branch}
-      loading={loading}
       disabled={disabled}
       onStatsChange={onStatsChange}
     />

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useAtom, useAtomValue } from "jotai";
 import {
   commandSessionAtom,
@@ -25,6 +25,8 @@ const OnlineRace = dynamic(
   { ssr: false },
 );
 
+const MemoizedStatsPanel = memo(StatsPanel);
+
 export function GameShell() {
   const mode = useAtomValue(gameModeAtom);
   const lobbyStatus = useAtomValue(lobbyStatusAtom);
@@ -32,21 +34,43 @@ export function GameShell() {
   const [playerId] = useAtom(playerIdAtom);
   const [username] = useAtom(usernameAtom);
   const [, setSession] = useAtom(commandSessionAtom);
+  const [mounted, setMounted] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({ wpm: 0, accuracy: 100, elapsedMs: 0 });
   const [sessionKey, setSessionKey] = useState(0);
   const emitProgressRef = useRef<(index: number, wpm: number) => void>(() => {});
 
-  const isOnline = mode === "online";
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isOnline = mounted && mode === "online";
 
   const activeText = isOnline ? onlineSnippet : "";
   const canType = isOnline ? lobbyStatus === "racing" : true;
-  const surfaceLoading = loading || (isOnline && lobbyStatus !== "racing" && !onlineSnippet);
+  const surfaceLoading =
+    loading || (isOnline && (lobbyStatus !== "racing" || !activeText));
 
   const handleOnlineProgress = useCallback((index: number, wpm: number) => {
     emitProgressRef.current(index, wpm);
   }, []);
+
+  const handleStatsChange = useCallback(
+    (next: { wpm: number; accuracy: number; elapsedMs: number }) => {
+      setStats((prev) => {
+        if (
+          prev.wpm === next.wpm &&
+          prev.accuracy === next.accuracy &&
+          prev.elapsedMs === next.elapsedMs
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const loadNewSession = useCallback(async () => {
     setLoading(true);
@@ -76,29 +100,29 @@ export function GameShell() {
       {isOnline && <Separator className="mx-auto max-w-5xl" />}
 
       {!isOnline && (
-        <StatsPanel wpm={stats.wpm} accuracy={stats.accuracy} elapsedMs={stats.elapsedMs} />
+        <MemoizedStatsPanel wpm={stats.wpm} accuracy={stats.accuracy} elapsedMs={stats.elapsedMs} />
       )}
 
       <MacTerminal title={isOnline ? "bash-racer — lobby" : "bash-racer — practice"}>
         {isOnline ? (
           <TypingSurface
-            key={`online-${activeText.slice(0, 20)}`}
+            key={`online-${activeText}`}
+            mode="online"
             text={activeText}
             username={username}
-            branch="race"
             loading={surfaceLoading}
             disabled={!canType}
             onProgress={handleOnlineProgress}
-            onStatsChange={setStats}
+            onStatsChange={handleStatsChange}
           />
         ) : (
           <TypingSurface
             key={`offline-${sessionKey}`}
+            mode="practice"
             username={username}
-            branch="practice"
             loading={surfaceLoading}
             disabled={!canType}
-            onStatsChange={setStats}
+            onStatsChange={handleStatsChange}
           />
         )}
       </MacTerminal>

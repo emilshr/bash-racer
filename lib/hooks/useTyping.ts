@@ -1,14 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useAtom } from "jotai";
-import { initialTypingState, typingStateAtom } from "@/lib/atoms/game";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { initialTypingState, type TypingState } from "@/lib/atoms/game";
 import {
   clampCursorToLine,
   findPrevWordStart,
   getLineBounds,
   shiftErrorIndices,
 } from "@/lib/typing/cursor";
+import {
+  applyNewlineKeystroke,
+  applyPrintableKeystroke,
+  canCompleteLine,
+  canTypeAtCursor,
+  deleteRange,
+} from "@/lib/typing/keystroke";
 import { calculateAccuracy, calculateWpm } from "@/lib/typing/metrics";
 
 type TypingStats = { wpm: number; accuracy: number; elapsedMs: number };
@@ -21,18 +27,6 @@ type UseTypingOptions = {
   disabled?: boolean;
 };
 
-function countCorrectChars(typedChars: string[], text: string): number {
-  let count = 0;
-  for (let i = 0; i < typedChars.length; i++) {
-    if (typedChars[i] === text[i]) count++;
-  }
-  return count;
-}
-
-function deleteRange(typedChars: string[], from: number, to: number): string[] {
-  return [...typedChars.slice(0, from), ...typedChars.slice(to)];
-}
-
 export function useTyping({
   text,
   onProgress,
@@ -40,7 +34,7 @@ export function useTyping({
   onLineComplete,
   disabled,
 }: UseTypingOptions) {
-  const [state, setState] = useAtom(typingStateAtom);
+  const [state, setState] = useState<TypingState>(initialTypingState);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -58,37 +52,18 @@ export function useTyping({
   const lastStatsRef = useRef<TypingStats | null>(null);
 
   const [elapsedMs, setElapsedMs] = useState(0);
+  const sessionMode = Boolean(onLineComplete);
 
   const reset = useCallback(() => {
     setState(initialTypingState);
     setErrorIndices(new Set());
     setElapsedMs(0);
     lastStatsRef.current = null;
-  }, [setState]);
+  }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     reset();
   }, [text, reset]);
-
-  useEffect(() => {
-    if (!state.startedAt) {
-      setElapsedMs(0);
-      return;
-    }
-    if (state.finishedAt) {
-      setElapsedMs(state.finishedAt - state.startedAt);
-      return;
-    }
-    const update = () => setElapsedMs(Date.now() - state.startedAt!);
-    update();
-    const id = setInterval(update, 250);
-    return () => clearInterval(id);
-  }, [state.startedAt, state.finishedAt]);
-
-  const wpm = calculateWpm(state.correctKeystrokes, elapsedMs);
-  const accuracy = calculateAccuracy(state.correctKeystrokes, state.totalKeystrokes);
-  const isLineComplete = state.typedChars.length >= text.length && text.length > 0;
-  const isFinished = isLineComplete && !onLineComplete;
 
   const notifyStats = useCallback((stats: TypingStats) => {
     const prev = lastStatsRef.current;
@@ -104,9 +79,42 @@ export function useTyping({
     onStatsChangeRef.current?.(stats);
   }, []);
 
+  const pushStats = useCallback(
+    (nextState: TypingState, elapsed: number) => {
+      notifyStats({
+        wpm: calculateWpm(nextState.correctKeystrokes, elapsed),
+        accuracy: calculateAccuracy(nextState.correctKeystrokes, nextState.totalKeystrokes),
+        elapsedMs: elapsed,
+      });
+    },
+    [notifyStats],
+  );
+
   useEffect(() => {
-    notifyStats({ wpm, accuracy, elapsedMs });
-  }, [wpm, accuracy, elapsedMs, notifyStats]);
+    if (!state.startedAt) {
+      setElapsedMs(0);
+      return;
+    }
+    if (state.finishedAt) {
+      const elapsed = state.finishedAt - state.startedAt;
+      setElapsedMs(elapsed);
+      pushStats(stateRef.current, elapsed);
+      return;
+    }
+    const update = () => {
+      const elapsed = Date.now() - state.startedAt!;
+      setElapsedMs(elapsed);
+      pushStats(stateRef.current, elapsed);
+    };
+    update();
+    const id = setInterval(update, 250);
+    return () => clearInterval(id);
+  }, [state.startedAt, state.finishedAt, pushStats]);
+
+  const wpm = calculateWpm(state.correctKeystrokes, elapsedMs);
+  const accuracy = calculateAccuracy(state.correctKeystrokes, state.totalKeystrokes);
+  const isLineComplete = state.typedChars.length >= text.length && text.length > 0;
+  const isFinished = isLineComplete && !onLineComplete;
 
   const emitProgress = useCallback(
     (furthestIndex: number, correctKeystrokes: number, startedAt: number) => {
@@ -136,25 +144,25 @@ export function useTyping({
       }
 
       setErrorIndices((errs) => shiftErrorIndices(errs, boundedFrom, removedCount));
-      setState((prev) => {
-        const newCursor = clampCursorToLine(
+      const nextState: TypingState = {
+        ...current,
+        cursorIndex: clampCursorToLine(
           boundedFrom,
           text,
-          prev.lineLockIndex,
+          current.lineLockIndex,
           nextTyped.length,
-        );
-        return {
-          ...prev,
-          cursorIndex: newCursor,
-          furthestIndex: Math.min(prev.furthestIndex, nextTyped.length),
-          typedChars: nextTyped,
-          totalKeystrokes: Math.max(0, prev.totalKeystrokes - removedCount),
-          correctKeystrokes: Math.max(0, prev.correctKeystrokes - correctRemoved),
-          finishedAt: null,
-        };
-      });
+        ),
+        furthestIndex: Math.min(current.furthestIndex, nextTyped.length),
+        typedChars: nextTyped,
+        totalKeystrokes: Math.max(0, current.totalKeystrokes - removedCount),
+        correctKeystrokes: Math.max(0, current.correctKeystrokes - correctRemoved),
+        finishedAt: null,
+      };
+      setState(nextState);
+      const elapsed = nextState.startedAt ? Date.now() - nextState.startedAt : 0;
+      pushStats(nextState, elapsed);
     },
-    [text, setState],
+    [text, pushStats],
   );
 
   const handleKeyDown = useCallback(
@@ -225,44 +233,26 @@ export function useTyping({
       if (e.key === "Enter") {
         e.preventDefault();
         if (onLineCompleteRef.current) {
+          if (!canCompleteLine(current.typedChars.length, text.length)) return;
+
           const now = Date.now();
           const typed = [...current.typedChars];
           const errors = [...errorIndicesRef.current];
-          setState((prev) => {
-            const startedAt = prev.startedAt ?? now;
-            return { ...prev, startedAt };
-          });
+          const startedAt = current.startedAt ?? now;
+          const nextState = { ...current, startedAt };
+          setState(nextState);
           onLineCompleteRef.current({ typedChars: typed, errorIndices: errors });
         } else {
           const char = "\n";
           const now = Date.now();
           const cursorIndex = current.cursorIndex;
-          const expected = text[cursorIndex];
-          const isCorrect = char === expected;
-          setState((prev) => {
-            const startedAt = prev.startedAt ?? now;
-            const nextTyped = [...prev.typedChars];
-            if (cursorIndex < nextTyped.length) {
-              nextTyped[cursorIndex] = char;
-            } else {
-              nextTyped.push(char);
-            }
-            const newIndex = cursorIndex + 1;
-            const newFurthest = Math.max(prev.furthestIndex, newIndex);
-            const newCorrect = countCorrectChars(nextTyped, text);
-            const finished = nextTyped.length >= text.length;
-            emitProgress(newFurthest, newCorrect, startedAt);
-            return {
-              ...prev,
-              startedAt,
-              cursorIndex: newIndex,
-              furthestIndex: newFurthest,
-              typedChars: nextTyped,
-              totalKeystrokes: prev.totalKeystrokes + 1,
-              correctKeystrokes: newCorrect,
-              finishedAt: finished ? now : null,
-            };
-          });
+          const isCorrect = char === text[cursorIndex];
+          const nextState = applyNewlineKeystroke(current, text, cursorIndex, char, now);
+          setState(nextState);
+          emitProgress(nextState.furthestIndex, nextState.correctKeystrokes, nextState.startedAt!);
+          const elapsed = nextState.startedAt ? Date.now() - nextState.startedAt : 0;
+          pushStats(nextState, elapsed);
+
           if (!isCorrect) {
             setErrorIndices((prev) => new Set(prev).add(cursorIndex));
           } else {
@@ -280,38 +270,24 @@ export function useTyping({
       if (!isPrintable) return;
       e.preventDefault();
 
+      const cursorIndex = current.cursorIndex;
+      if (!canTypeAtCursor(cursorIndex, text.length, sessionMode)) return;
+
       const char = e.key;
       const now = Date.now();
-      const cursorIndex = current.cursorIndex;
-      const expected = text[cursorIndex];
-      const isCorrect = char === expected;
-
-      setState((prev) => {
-        const startedAt = prev.startedAt ?? now;
-        const nextTyped = [...prev.typedChars];
-        if (cursorIndex < nextTyped.length) {
-          nextTyped[cursorIndex] = char;
-        } else {
-          nextTyped.push(char);
-        }
-        const newIndex = cursorIndex + 1;
-        const newFurthest = Math.max(prev.furthestIndex, newIndex);
-        const newCorrect = countCorrectChars(nextTyped, text);
-        const finished = !onLineCompleteRef.current && nextTyped.length >= text.length;
-
-        emitProgress(newFurthest, newCorrect, startedAt);
-
-        return {
-          ...prev,
-          startedAt,
-          cursorIndex: newIndex,
-          furthestIndex: newFurthest,
-          typedChars: nextTyped,
-          totalKeystrokes: prev.totalKeystrokes + 1,
-          correctKeystrokes: newCorrect,
-          finishedAt: finished ? now : null,
-        };
-      });
+      const isCorrect = char === text[cursorIndex];
+      const nextState = applyPrintableKeystroke(
+        current,
+        text,
+        cursorIndex,
+        char,
+        now,
+        sessionMode,
+      );
+      setState(nextState);
+      emitProgress(nextState.furthestIndex, nextState.correctKeystrokes, nextState.startedAt!);
+      const elapsed = nextState.startedAt ? Date.now() - nextState.startedAt : 0;
+      pushStats(nextState, elapsed);
 
       if (!isCorrect) {
         setErrorIndices((prev) => new Set(prev).add(cursorIndex));
@@ -323,7 +299,7 @@ export function useTyping({
         });
       }
     },
-    [disabled, text, setState, applyDeletion, emitProgress],
+    [disabled, text, sessionMode, applyDeletion, emitProgress, pushStats],
   );
 
   const focus = useCallback(() => {

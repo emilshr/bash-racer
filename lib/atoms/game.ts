@@ -1,5 +1,6 @@
 import { atom } from "jotai";
 import { atomWithStorage, createJSONStorage } from "jotai/utils";
+import { SESSION_COMMAND_COUNT } from "@/lib/constants/session";
 
 export type GameMode = "offline" | "online";
 
@@ -11,14 +12,14 @@ const noopStorage = {
   removeItem: () => {},
 };
 
-const localStorage = createJSONStorage<GameMode>(() =>
+const gameModeStorage = createJSONStorage<GameMode>(() =>
   typeof window !== "undefined" ? window.localStorage : noopStorage,
 );
 
 export const gameModeAtom = atomWithStorage<GameMode>(
   `bash-racer-mode:${STORAGE_VERSION}`,
   "offline",
-  localStorage,
+  gameModeStorage,
 );
 
 export type TypingState = {
@@ -43,8 +44,6 @@ export const initialTypingState: TypingState = {
   correctKeystrokes: 0,
 };
 
-export const typingStateAtom = atom<TypingState>(initialTypingState);
-
 export type PlayerProgress = {
   playerId: string;
   username: string;
@@ -60,7 +59,6 @@ export type LobbyStatus = "waiting" | "countdown" | "racing" | "finished";
 export const lobbyStatusAtom = atom<LobbyStatus>("waiting");
 export const lobbyCountdownEndsAtAtom = atom<number | null>(null);
 export const currentSnippetAtom = atom<string>("");
-export const SESSION_COMMAND_COUNT = 8;
 
 export type CommandSession = {
   commands: string[];
@@ -73,8 +71,12 @@ export const commandSessionAtom = atom<CommandSession | null>(null);
 export const raceStartedAtAtom = atom<number | null>(null);
 
 export function createCommandSession(commands: string[]): CommandSession {
+  const normalized = commands
+    .filter((command) => command.length > 0)
+    .slice(0, SESSION_COMMAND_COUNT);
+
   return {
-    commands,
+    commands: normalized,
     activeIndex: 0,
     completedTyped: [],
     completedErrors: [],

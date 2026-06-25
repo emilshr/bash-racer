@@ -24,16 +24,17 @@ export function useCommandSession({ onStatsChange, disabled }: UseCommandSession
 
   const handleLineComplete = useCallback(
     (snapshot: { typedChars: string[]; errorIndices: number[] }) => {
-      if (!session) return;
-
-      setSession({
-        ...session,
-        activeIndex: session.activeIndex + 1,
-        completedTyped: [...session.completedTyped, snapshot.typedChars],
-        completedErrors: [...session.completedErrors, snapshot.errorIndices],
+      setSession((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          activeIndex: prev.activeIndex + 1,
+          completedTyped: [...prev.completedTyped, snapshot.typedChars],
+          completedErrors: [...prev.completedErrors, snapshot.errorIndices],
+        };
       });
     },
-    [session, setSession],
+    [setSession],
   );
 
   const typing = useTyping({

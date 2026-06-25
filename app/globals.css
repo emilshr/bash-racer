@@ -149,3 +149,10 @@
     opacity: 0;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-terminal-cursor-blink {
+    animation: none;
+    opacity: 1;
+  }
+}
