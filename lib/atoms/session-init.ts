@@ -1,11 +1,10 @@
 import type { createStore } from "jotai/vanilla";
-import { getDefaultStore } from "jotai";
 import { generateUsername, playerIdAtom, usernameAtom } from "@/lib/atoms/session";
 
 type AppStore = ReturnType<typeof createStore>;
 
 export async function ensurePlayerSession(
-  store: AppStore = getDefaultStore(),
+  store: AppStore,
 ): Promise<{ playerId: string; username: string }> {
   let playerId = store.get(playerIdAtom);
   if (!playerId) {

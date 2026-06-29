@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom, useSetAtom, useStore } from "jotai";
 import type { Socket } from "socket.io-client";
 import {
   currentSnippetAtom,
@@ -18,6 +18,7 @@ import type { ClientToServerEvents, ServerToClientEvents } from "@/lib/socket/ev
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 export function useSocket(enabled: boolean) {
+  const store = useStore();
   const socketRef = useRef<AppSocket | null>(null);
   const [playerSession, setPlayerSession] = useAtom(playerSessionAtom);
   const playerSessionRef = useRef(playerSession);
@@ -36,7 +37,7 @@ export function useSocket(enabled: boolean) {
     let cancelled = false;
 
     void (async () => {
-      const { playerId, username } = await ensurePlayerSession();
+      const { playerId, username } = await ensurePlayerSession(store);
       if (cancelled) return;
 
       const { io } = await import("socket.io-client");
@@ -112,6 +113,7 @@ export function useSocket(enabled: boolean) {
     };
   }, [
     enabled,
+    store,
     setPlayerSession,
     setRaceProgress,
     setLobbyStatus,
