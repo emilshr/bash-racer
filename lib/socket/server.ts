@@ -29,18 +29,18 @@ export function initSocketServer(httpServer: HttpServer) {
     },
   );
 
-  if (env.UPSTASH_REDIS_URL) {
-    const pubClient = new Redis(env.UPSTASH_REDIS_URL, { maxRetriesPerRequest: null });
+  if (env.REDIS_URL) {
+    const pubClient = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
     const subClient = pubClient.duplicate();
     io.adapter(createAdapter(pubClient, subClient));
     console.log("> Socket.IO Redis adapter enabled");
   } else if (
     env.NODE_ENV === "production" &&
-    env.UPSTASH_REDIS_REST_URL &&
-    env.UPSTASH_REDIS_REST_TOKEN
+    env.KV_REST_API_URL &&
+    env.KV_REST_API_TOKEN
   ) {
     console.warn(
-      "> UPSTASH_REDIS_REST_* is set but UPSTASH_REDIS_URL is missing — lobby state is shared but Socket.IO broadcasts are single-instance only",
+      "> KV_REST_API_* is set but REDIS_URL is missing — lobby state is shared but Socket.IO broadcasts are single-instance only",
     );
   }
 

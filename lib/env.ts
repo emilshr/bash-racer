@@ -9,17 +9,17 @@ const envSchema = z
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
     PORT: z.coerce.number().default(3000),
     DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
-    UPSTASH_REDIS_REST_URL: z.string().url().optional(),
-    UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
-    UPSTASH_REDIS_URL: z.string().url().optional(),
+    KV_REST_API_URL: z.string().url().optional(),
+    KV_REST_API_TOKEN: z.string().min(1).optional(),
+    REDIS_URL: z.string().url().optional(),
     SKIP_ENV_VALIDATION: z.string().optional(),
   })
   .refine(
     (d) =>
-      (!d.UPSTASH_REDIS_REST_URL && !d.UPSTASH_REDIS_REST_TOKEN) ||
-      (Boolean(d.UPSTASH_REDIS_REST_URL) && Boolean(d.UPSTASH_REDIS_REST_TOKEN)),
+      (!d.KV_REST_API_URL && !d.KV_REST_API_TOKEN) ||
+      (Boolean(d.KV_REST_API_URL) && Boolean(d.KV_REST_API_TOKEN)),
     {
-      message: "UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set together",
+      message: "KV_REST_API_URL and KV_REST_API_TOKEN must be set together",
     },
   );
 
@@ -29,9 +29,9 @@ function parseEnv() {
       NODE_ENV: (process.env.NODE_ENV ?? "development") as "development" | "production" | "test",
       PORT: Number(process.env.PORT ?? 3000),
       DATABASE_URL: process.env.DATABASE_URL ?? "",
-      UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
-      UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
-      UPSTASH_REDIS_URL: process.env.UPSTASH_REDIS_URL,
+      KV_REST_API_URL: process.env.KV_REST_API_URL,
+      KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN,
+      REDIS_URL: process.env.REDIS_URL,
       SKIP_ENV_VALIDATION: process.env.SKIP_ENV_VALIDATION,
     };
   }

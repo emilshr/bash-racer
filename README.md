@@ -27,9 +27,9 @@ pnpm db:seed
 
 1. Create a database at [Upstash Console](https://console.upstash.com)
 2. From **Connect**, copy:
-   - `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (REST — lobby state)
-   - `UPSTASH_REDIS_URL` (TCP `rediss://` — Socket.IO adapter pub/sub)
-3. On Vercel: add the Upstash integration (auto-injects REST vars); manually add `UPSTASH_REDIS_URL` from the TCP section
+   - `KV_REST_API_URL` + `KV_REST_API_TOKEN` (REST — lobby state)
+   - `REDIS_URL` (TCP `rediss://` — Socket.IO adapter pub/sub)
+3. On Vercel: add the Upstash integration (auto-injects `KV_REST_API_*` and `REDIS_URL`)
 
 Without Upstash vars, lobbies use in-memory storage (fine for local solo dev).
 
@@ -60,9 +60,9 @@ Validated with Zod in [`lib/env.ts`](lib/env.ts).
 | Variable                   | Required | Description                                 |
 | -------------------------- | -------- | ------------------------------------------- |
 | `DATABASE_URL`             | Yes      | Neon Postgres connection string             |
-| `UPSTASH_REDIS_REST_URL`   | Prod     | Upstash REST URL for lobby state            |
-| `UPSTASH_REDIS_REST_TOKEN` | Prod     | Upstash REST token (set with URL)           |
-| `UPSTASH_REDIS_URL`        | Prod     | Upstash TCP URL for Socket.IO adapter       |
+| `KV_REST_API_URL`   | Prod     | Upstash REST URL for lobby state            |
+| `KV_REST_API_TOKEN` | Prod     | Upstash REST token (set with URL)           |
+| `REDIS_URL`         | Prod     | Upstash TCP URL for Socket.IO adapter       |
 | `SKIP_ENV_VALIDATION`      | No       | Set `true` for drizzle-kit without full env |
 
 ## Scripts
