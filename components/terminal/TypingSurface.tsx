@@ -25,13 +25,7 @@ function segmentClass(errorIndices: Set<number> | number[], index: number): stri
   return hasError ? "text-destructive" : "text-terminal-fg";
 }
 
-function CursorCell({
-  showCursor,
-  children,
-}: {
-  showCursor: boolean;
-  children?: string;
-}) {
+function CursorCell({ showCursor, children }: { showCursor: boolean; children?: string }) {
   return (
     <span className="relative inline-block min-w-[1ch] leading-none text-terminal-muted">
       {showCursor && (
@@ -170,7 +164,9 @@ function SessionLines({
         }
 
         if (index > session.activeIndex) {
-          return <FutureCommandLine key={`${index}-${command}`} command={command} username={username} />;
+          return (
+            <FutureCommandLine key={`${index}-${command}`} command={command} username={username} />
+          );
         }
 
         return (
@@ -360,11 +356,5 @@ export function TypingSurface({
     );
   }
 
-  return (
-    <SessionSurface
-      username={username}
-      disabled={disabled}
-      onStatsChange={onStatsChange}
-    />
-  );
+  return <SessionSurface username={username} disabled={disabled} onStatsChange={onStatsChange} />;
 }

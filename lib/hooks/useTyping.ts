@@ -120,7 +120,10 @@ export function useTyping({
     (furthestIndex: number, correctKeystrokes: number, startedAt: number) => {
       const now = Date.now();
       const currentWpm = calculateWpm(correctKeystrokes, now - startedAt);
-      if (onProgressRef.current && (furthestIndex >= text.length || now - lastEmitRef.current > 100)) {
+      if (
+        onProgressRef.current &&
+        (furthestIndex >= text.length || now - lastEmitRef.current > 100)
+      ) {
         lastEmitRef.current = now;
         queueMicrotask(() => onProgressRef.current?.(furthestIndex, currentWpm));
       }
@@ -146,12 +149,7 @@ export function useTyping({
       setErrorIndices((errs) => shiftErrorIndices(errs, boundedFrom, removedCount));
       const nextState: TypingState = {
         ...current,
-        cursorIndex: clampCursorToLine(
-          boundedFrom,
-          text,
-          current.lineLockIndex,
-          nextTyped.length,
-        ),
+        cursorIndex: clampCursorToLine(boundedFrom, text, current.lineLockIndex, nextTyped.length),
         furthestIndex: Math.min(current.furthestIndex, nextTyped.length),
         typedChars: nextTyped,
         totalKeystrokes: Math.max(0, current.totalKeystrokes - removedCount),
@@ -276,14 +274,7 @@ export function useTyping({
       const char = e.key;
       const now = Date.now();
       const isCorrect = char === text[cursorIndex];
-      const nextState = applyPrintableKeystroke(
-        current,
-        text,
-        cursorIndex,
-        char,
-        now,
-        sessionMode,
-      );
+      const nextState = applyPrintableKeystroke(current, text, cursorIndex, char, now, sessionMode);
       setState(nextState);
       emitProgress(nextState.furthestIndex, nextState.correctKeystrokes, nextState.startedAt!);
       const elapsed = nextState.startedAt ? Date.now() - nextState.startedAt : 0;

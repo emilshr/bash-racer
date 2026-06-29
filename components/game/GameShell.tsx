@@ -49,8 +49,7 @@ export function GameShell() {
 
   const activeText = isOnline ? onlineSnippet : "";
   const canType = isOnline ? lobbyStatus === "racing" : true;
-  const surfaceLoading =
-    loading || (isOnline && (lobbyStatus !== "racing" || !activeText));
+  const surfaceLoading = loading || (isOnline && (lobbyStatus !== "racing" || !activeText));
 
   const handleOnlineProgress = useCallback((index: number, wpm: number) => {
     emitProgressRef.current(index, wpm);

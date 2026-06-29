@@ -19,8 +19,7 @@ export function useCommandSession({ onStatsChange, disabled }: UseCommandSession
   const [session, setSession] = useAtom(commandSessionAtom);
 
   const activeCommand = session?.commands[session.activeIndex] ?? "";
-  const isSessionFinished =
-    session !== null && session.activeIndex >= session.commands.length;
+  const isSessionFinished = session !== null && session.activeIndex >= session.commands.length;
 
   const handleLineComplete = useCallback(
     (snapshot: { typedChars: string[]; errorIndices: number[] }) => {
@@ -45,9 +44,7 @@ export function useCommandSession({ onStatsChange, disabled }: UseCommandSession
   });
 
   const totalChars = session ? sessionTotalChars(session) : 0;
-  const progressChars = session
-    ? sessionProgressChars(session, typing.state.typedChars.length)
-    : 0;
+  const progressChars = session ? sessionProgressChars(session, typing.state.typedChars.length) : 0;
 
   const loadSession = useCallback(
     (commands: string[]) => {

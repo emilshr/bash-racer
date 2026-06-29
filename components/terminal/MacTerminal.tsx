@@ -10,10 +10,7 @@ type MacTerminalProps = {
 export function MacTerminal({ title = "bash — zsh", children, className }: MacTerminalProps) {
   return (
     <Card
-      className={cn(
-        "mx-auto flex h-[70vh] w-[80vw] flex-col gap-0 overflow-hidden p-0",
-        className,
-      )}
+      className={cn("mx-auto flex h-[70vh] w-[80vw] flex-col gap-0 overflow-hidden p-0", className)}
     >
       <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-2.5">
         <div className="pointer-events-none flex gap-1.5">

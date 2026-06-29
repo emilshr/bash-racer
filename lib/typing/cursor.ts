@@ -73,11 +73,7 @@ export function moveVertical(
   return clampCursor(indexFromLineColumn(text, targetLine, column), maxIndex);
 }
 
-export function shiftErrorIndices(
-  errors: Set<number>,
-  from: number,
-  count: number,
-): Set<number> {
+export function shiftErrorIndices(errors: Set<number>, from: number, count: number): Set<number> {
   const next = new Set<number>();
   for (const idx of errors) {
     if (idx < from) next.add(idx);
