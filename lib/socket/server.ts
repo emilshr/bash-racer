@@ -34,11 +34,7 @@ export function initSocketServer(httpServer: HttpServer) {
     const subClient = pubClient.duplicate();
     io.adapter(createAdapter(pubClient, subClient));
     console.log("> Socket.IO Redis adapter enabled");
-  } else if (
-    env.NODE_ENV === "production" &&
-    env.KV_REST_API_URL &&
-    env.KV_REST_API_TOKEN
-  ) {
+  } else if (env.NODE_ENV === "production" && env.KV_REST_API_URL && env.KV_REST_API_TOKEN) {
     console.warn(
       "> KV_REST_API_* is set but REDIS_URL is missing — lobby state is shared but Socket.IO broadcasts are single-instance only",
     );

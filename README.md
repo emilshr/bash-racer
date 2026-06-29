@@ -57,13 +57,13 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Validated with Zod in [`lib/env.ts`](lib/env.ts).
 
-| Variable                   | Required | Description                                 |
-| -------------------------- | -------- | ------------------------------------------- |
-| `DATABASE_URL`             | Yes      | Neon Postgres connection string             |
-| `KV_REST_API_URL`   | Prod     | Upstash REST URL for lobby state            |
-| `KV_REST_API_TOKEN` | Prod     | Upstash REST token (set with URL)           |
-| `REDIS_URL`         | Prod     | Upstash TCP URL for Socket.IO adapter       |
-| `SKIP_ENV_VALIDATION`      | No       | Set `true` for drizzle-kit without full env |
+| Variable              | Required | Description                                 |
+| --------------------- | -------- | ------------------------------------------- |
+| `DATABASE_URL`        | Yes      | Neon Postgres connection string             |
+| `KV_REST_API_URL`     | Prod     | Upstash REST URL for lobby state            |
+| `KV_REST_API_TOKEN`   | Prod     | Upstash REST token (set with URL)           |
+| `REDIS_URL`           | Prod     | Upstash TCP URL for Socket.IO adapter       |
+| `SKIP_ENV_VALIDATION` | No       | Set `true` for drizzle-kit without full env |
 
 ## Scripts
 
